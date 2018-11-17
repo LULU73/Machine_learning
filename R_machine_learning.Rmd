@@ -41,8 +41,10 @@ rm(pml_train)
 set.seed(12345)
 mod_svm <- svm(classe ~ ., data = training)
 # summary(mod_svm)
+pred_svm_train <- predict(mod_svm, training)
+table(pred_svm_train, training$classe)
+
 pred_svm_test <- predict(mod_svm, testing)
-# table(pred_svm_train, training$classe)
 accuracy_svm <- confusionMatrix(pred_svm_test, testing$classe)$overall[1]
 
 ##--- random fororest
