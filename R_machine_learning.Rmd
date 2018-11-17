@@ -1,0 +1,92 @@
+---
+title: "Practical Machine Learning"
+output : html_document
+--- 
+
+```{r}
+library(data.table)
+library(caret)
+library(e1071)
+library(rmarkdown)
+
+```
+
+### preparing data
+
+```{r}
+pml_train <- fread("data/pml-training.csv")
+
+## view data globaux information
+# str(pml_train)
+# dim(pml_train)
+
+## drop the NAs
+Count_NA <- data.frame( Nb_NA=apply(pml_train, 2, function(x) sum(is.na(x))) )
+pml_train <- pml_train[, (Count_NA$Nb_NA==0), with=FALSE]
+pml_train <- na.omit(pml_train) # most lines are still there, so I keep this way
+pml_train <- pml_train[, -c(1:7)]
+
+pml_train$classe <- as.factor(pml_train$classe )
+```
+
+### Modelling
+
+```{r}
+inTrain = createDataPartition(pml_train$classe, p = 0.75)[[1]]
+training <- pml_train[inTrain]
+testing <- pml_train[-inTrain]
+rm(pml_train)
+
+##--- svm : the fastest
+set.seed(12345)
+mod_svm <- svm(classe ~ ., data = training)
+# summary(mod_svm)
+pred_svm_test <- predict(mod_svm, testing)
+# table(pred_svm_train, training$classe)
+accuracy_svm <- confusionMatrix(pred_svm_test, testing$classe)$overall[1]
+
+##--- random fororest
+set.seed(12345)
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+mod_rf <- train(classe ~ ., data=training, method="rf", trControl=controlRF)
+mod_rf$finalModel
+pred_rf_test <- predict(mod_rf, testing)
+accuracy_rf <- confusionMatrix(pred_rf_test, testing$classe)$overall[1]
+
+##--- gbm
+set.seed(12345)
+controlGbm <- trainControl(method = "repeatedcv", number = 3, repeats = 1)
+mod_gbm  <- train(classe ~ ., data=training, method = "gbm", trControl = controlGbm, verbose = FALSE)
+mod_gbm$finalModel
+pred_gbm_test <- predict(mod_gbm, testing)
+accuracy_gbm <- confusionMatrix(pred_gbm_test, testing$classe)$overall[1]
+```
+Accuracy values of the 3 methodes :
+```{r}
+print( paste0( "SVM :  ", accuracy_svm ) )
+print( paste0( "Rf :  ", accuracy_rf ) )
+print( paste0( "Gbm :  ", accuracy_gbm ) )
+```
+So the best methode is the random forest 0.99, and I use it to do the prediction.
+
+### Prediction
+
+```{r}
+pml_test <- fread("data/pml-testing.csv")
+pml_test <- pml_test[, (Count_NA$Nb_NA==0), with=FALSE]
+pml_test <- na.omit(pml_test)
+pml_test <- pml_test[, -c(1:7)]
+pred_rf_test_res <- predict(mod_rf, pml_test)
+```
+
+The predicted values are: 
+```{r}
+pred_rf_test_res
+## save the resultat in a csv file
+pml_test_result <- cbind(pml_test, predict = pred_rf_test_res)
+fwrite(pml_test_result, file= "pml_test_result.csv" )
+```
+
+
+
+
